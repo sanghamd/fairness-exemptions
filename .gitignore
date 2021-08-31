@@ -1,0 +1,8 @@
+*.fig
+Results
+Results_hpw_20_30_40
+Results_hpw_40_40_45
+Results_set1
+FINAL.txt
+*.m
+__pycache__

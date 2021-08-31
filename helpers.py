@@ -19,6 +19,10 @@ from keras.models import Sequential, Model
 from keras.layers import Input, Dense, Dropout
 import keras.backend as K
 
+import dit
+import time
+
+
 font = {'weight' : 'bold'}
 
 rc('font', **font)
@@ -76,7 +80,7 @@ def MI(a, b):
     r_num = K.square(K.sum(am * bm))
     r_den = (K.sum(K.square(am)) * K.sum(K.square(bm))) +EPS
     r = r_num / r_den
-    return -K.log(1-r+EPS)
+    return -0.5*K.log(1-r+EPS)
 
 
 #Correlation-Based CMI
@@ -94,6 +98,16 @@ def CMI(a,b,d,dm1,dm2,dm3):
     p3=K.sum(K.cast(mask3,'float32'))
     p4=K.sum(K.cast(mask4,'float32'))
     return tf.divide(p1,p1+p2+p3+p4)*m1 + tf.divide(p2,p1+p2+p3+p4)*m2 + tf.divide(p3,p1+p2+p3+p4)*m3 +tf.divide(p4,p1+p2+p3+p4)*m4
+
+#Correlation-Based CMI2
+def CMI2(a,b,d,dm1):
+    mask1=K.less_equal(d,dm1)
+    mask2=K.greater(d,dm1)
+    m1=MI(tf.boolean_mask(a,mask1),tf.boolean_mask(b,mask1))
+    m2=MI(tf.boolean_mask(a,mask2),tf.boolean_mask(b,mask2))
+    p1=K.sum(K.cast(mask1,'float32'))
+    p2=K.sum(K.cast(mask2,'float32'))
+    return tf.divide(p1,p1+p2)*m1 + tf.divide(p2,p1+p2)*m2
 
 
 # Brute Force Computation of MI/CMI in the Actual Dataset for Evaluation
@@ -136,3 +150,66 @@ def brute_force_CMI(a,b,c,dm1,dm2,dm3):
 
 
 
+# Computing Unique Information from dit package (solves an optimization)
+def create_dist(a,b,c,dm1,dm2,dm3):
+    S=a
+    X=b
+    
+    
+    s_len=2
+    x_len=2
+    y_len=4
+    
+    mydict={}
+    for s in range(s_len):
+        for x in range(x_len):
+            for y in range(y_len):
+                s1=chr(65+s)
+                x1=chr(65+x)
+                y1=chr(65+y)
+                mydict["{}{}{}".format(s1,x1,y1)]=0
+
+    n=len(a)
+    for i in range(n):
+        #print(item)
+        s=chr(65+a[i])
+        
+        x=chr(65+b[i])
+        
+        if c[i]<dm1:
+            p=0
+        elif c[i]<dm2:
+            p=1
+        elif c[i]<dm3:
+            p=2
+        else:
+            p=3
+        
+        y=chr(65+p)
+        #print("{}{}{}".format(s,x,y))
+        mydict["{}{}{}".format(s,x,y)]=mydict["{}{}{}".format(s,x,y)]+1
+    
+    
+    
+    A=[]
+    B=[]
+    for key, value in mydict.items():
+        if value>0:
+            A.append(key)
+            B.append(value)
+
+
+    B=B/np.sum(B)
+
+    d=dit.Distribution(A,B)
+    return d
+
+
+
+def UNI(a,b,c,dm1,dm2,dm3):
+    d=create_dist(a,b,c,dm1,dm2,dm3)
+    d.set_rv_names('SXY')
+    dit_pid = dit.pid.PID_BROJA(d, ['X', 'Y'], 'S')
+    Uni = dit_pid.get_partial((('X', ), ))
+    #Red = dit_pid.get_partial((('X', ), ('Y', )))
+    return Uni
